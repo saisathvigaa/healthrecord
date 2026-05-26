@@ -10,8 +10,10 @@
 - [x] Upload Report screen with file picker and preview (UI ready)
 - [x] Mock biomarker data generator
 - [x] Micro-chart component for historical trends
+- [x] Comprehensive comparison charts screen with line charts
+- [x] Biomarker trend visualization with reference ranges
 - [ ] AI extraction integration (Gemini Vision - ready for integration)
-- [ ] Biomarker Detail screen with charts
+- [ ] Real file upload and extraction pipeline
 
 ## Branding & Polish
 - [x] Generate custom app logo
