@@ -7,13 +7,12 @@
 
 ## Core Features (IN PROGRESS)
 - [x] Dashboard screen with quick stats and recent reports
-- [x] Upload Report screen with file picker and preview (UI ready)
-- [x] Mock biomarker data generator
-- [x] Micro-chart component for historical trends
 - [x] Comprehensive comparison charts screen with line charts
-- [x] Biomarker trend visualization with reference ranges
-- [ ] AI extraction integration (Gemini Vision - ready for integration)
-- [ ] Real file upload and extraction pipeline
+- [ ] Upload Report screen with working file picker
+- [ ] Gemini Vision API integration for biomarker extraction
+- [ ] Backend extraction endpoint to process uploads
+- [ ] Dynamic chart updates from real database data
+- [ ] End-to-end upload → extract → chart workflow
 
 ## Branding & Polish
 - [x] Generate custom app logo
