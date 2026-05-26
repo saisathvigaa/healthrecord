@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import * as db from "./db";
+import { extractBiomarkersFromReport, saveExtractedBiomarkers } from "./extraction";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -41,6 +42,52 @@ export const appRouter = router({
           extractionStatus: "pending",
         })
       ),
+    extract: protectedProcedure
+      .input(z.object({
+        reportId: z.number(),
+        fileUrl: z.string(),
+        reportType: z.enum(["blood", "urine", "other"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          await db.updateReportStatus(input.reportId, "processing");
+          const extractionResult = await extractBiomarkersFromReport(
+            input.fileUrl,
+            input.reportType
+          );
+          if (!extractionResult.success) {
+            await db.updateReportStatus(input.reportId, "failed", extractionResult.error);
+            return {
+              success: false,
+              error: extractionResult.error,
+              biomarkers: [],
+            };
+          }
+          const createdReadings = await saveExtractedBiomarkers(
+            ctx.user.id,
+            input.reportId,
+            extractionResult.biomarkers
+          );
+          await db.updateReportStatus(
+            input.reportId,
+            "completed",
+            JSON.stringify(extractionResult.biomarkers)
+          );
+          return {
+            success: true,
+            biomarkers: extractionResult.biomarkers,
+            createdReadings,
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          await db.updateReportStatus(input.reportId, "failed", errorMessage);
+          return {
+            success: false,
+            error: errorMessage,
+            biomarkers: [],
+          };
+        }
+      }),
     updateStatus: protectedProcedure
       .input(z.object({
         reportId: z.number(),

@@ -11,11 +11,12 @@
 - [x] Biomarker detail screens with large charts and reference ranges
 - [x] Date filtering for biomarker charts (3m, 6m, 1y, all-time)
 - [x] Data summary statistics (min, max, avg values)
-- [ ] Upload Report screen with working file picker
-- [ ] Gemini Vision API integration for biomarker extraction
-- [ ] Backend extraction endpoint to process uploads
+- [x] Upload Report screen with working file picker
+- [x] Gemini Vision API integration for biomarker extraction (via platform LLM)
+- [x] Backend extraction endpoint to process uploads
+- [x] Extraction service with JSON schema validation
 - [ ] Dynamic chart updates from real database data
-- [ ] End-to-end upload → extract → chart workflow
+- [ ] End-to-end upload → extract → chart workflow (ready for testing)
 
 ## Branding & Polish
 - [x] Generate custom app logo

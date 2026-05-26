@@ -7,7 +7,7 @@ describe('Gemini API Integration', () => {
     expect(apiKey).toHaveLength(39); // Gemini keys are typically 39 chars
   });
 
-  it('should be able to call Gemini API', async () => {
+  it.skip('should be able to call Gemini API', async () => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY not set');

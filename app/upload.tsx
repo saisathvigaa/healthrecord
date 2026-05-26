@@ -11,19 +11,24 @@ export default function UploadScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const router = useRouter();
 
-  const uploadMutation = trpc.reports.create.useMutation({
-    onSuccess: () => {
+  const uploadMutation = trpc.reports.create.useMutation();
+  const extractMutation = trpc.reports.extract.useMutation({
+    onSuccess: (result) => {
       setIsProcessing(false);
-      alert('Report uploaded successfully! Extraction will process in the background.');
-      router.back();
+      if (result.success) {
+        alert(`✓ Extraction complete! Found ${result.biomarkers.length} biomarkers.`);
+        router.back();
+      } else {
+        alert(`Extraction failed: ${result.error}`);
+      }
     },
     onError: (error: any) => {
       setIsProcessing(false);
-      alert(`Error: ${error?.message || 'Upload failed'}`);
+      alert(`Error: ${error?.message || 'Extraction failed'}`);
     },
   });
 
-  // Mock upload - simulates file upload and extraction
+  // Mock upload - creates report and triggers extraction
   const handleMockUpload = async () => {
     setIsProcessing(true);
     try {
@@ -32,9 +37,17 @@ export default function UploadScreen() {
       const mockFileKey = `uploads/${Date.now()}-${mockFileName}`;
       const mockFileUrl = `https://example.com/reports/${mockFileKey}`;
 
-      await uploadMutation.mutateAsync({
+      // Step 1: Create the report
+      const reportId = await uploadMutation.mutateAsync({
         fileName: mockFileName,
         fileKey: mockFileKey,
+        fileUrl: mockFileUrl,
+        reportType,
+      });
+
+      // Step 2: Trigger extraction
+      await extractMutation.mutateAsync({
+        reportId: reportId as number,
         fileUrl: mockFileUrl,
         reportType,
       });
