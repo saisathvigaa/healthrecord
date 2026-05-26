@@ -2,14 +2,17 @@ import { ScrollView, Text, View, TouchableOpacity, FlatList, ActivityIndicator }
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import { useAuth } from '@/hooks/use-auth';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { getApiBaseUrl } from '@/constants/oauth';
 import { mockBiomarkers, mockReports, generateMockReadings } from '@/lib/mock-data';
 
 export default function DashboardScreen() {
   const colors = useColors();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const [demoMode, setDemoMode] = useState(false);
 
-  const isLoading = authLoading;
+  const isLoading = authLoading && !demoMode;
+  const showDashboard = isAuthenticated || demoMode;
 
   const allReadings = useMemo(() => {
     const readings: any[] = [];
@@ -64,11 +67,40 @@ export default function DashboardScreen() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!showDashboard) {
     return (
-      <ScreenContainer className="items-center justify-center gap-4">
-        <Text className="text-2xl font-bold text-foreground">Welcome to HealthTrack</Text>
-        <Text className="text-base text-muted text-center">Sign in to track your health records</Text>
+      <ScreenContainer className="items-center justify-center gap-6 px-6">
+        <View className="items-center gap-3">
+          <Text className="text-5xl">❤️</Text>
+          <Text className="text-3xl font-bold text-foreground text-center">HealthTrack</Text>
+          <Text className="text-base text-muted text-center">Track your health records with ease</Text>
+        </View>
+        <View className="w-full gap-3 mt-8">
+          <TouchableOpacity
+            onPress={() => {
+              // Trigger OAuth flow
+              const baseUrl = getApiBaseUrl();
+              const redirectUri = `${baseUrl}/oauth/callback`;
+              const authUrl = `${baseUrl}/api/auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`;
+              if (typeof window !== 'undefined') {
+                window.location.href = authUrl;
+              }
+            }}
+            className="w-full bg-primary rounded-xl py-4 items-center"
+          >
+            <Text className="text-white font-semibold text-lg">Sign In with OAuth</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setDemoMode(true)}
+            className="w-full bg-surface rounded-xl py-4 items-center border-2"
+            style={{ borderColor: colors.primary }}
+          >
+            <Text className="font-semibold text-lg" style={{ color: colors.primary }}>
+              View Demo
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Text className="text-xs text-muted text-center mt-6">Demo shows sample health data</Text>
       </ScreenContainer>
     );
   }
@@ -77,10 +109,23 @@ export default function DashboardScreen() {
     <ScreenContainer className="p-0">
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
         <View className="px-6 pt-6 pb-4">
-          <Text className="text-3xl font-bold text-foreground">Dashboard</Text>
-          <Text className="text-sm text-muted mt-1">
-            {mockReports.length} {mockReports.length === 1 ? 'report' : 'reports'} uploaded
-          </Text>
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1">
+              <Text className="text-3xl font-bold text-foreground">Dashboard</Text>
+              <Text className="text-sm text-muted mt-1">
+                {demoMode ? '📊 Demo Mode' : `${mockReports.length} reports uploaded`}
+              </Text>
+            </View>
+            {demoMode && (
+              <TouchableOpacity
+                onPress={() => setDemoMode(false)}
+                className="w-10 h-10 rounded-full items-center justify-center"
+                style={{ backgroundColor: colors.error }}
+              >
+                <Text className="text-white font-bold">✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {latestReadings.length > 0 && (
