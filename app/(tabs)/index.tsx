@@ -1,37 +1,35 @@
-import { ScrollView, Text, View, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import { useAuth } from '@/hooks/use-auth';
-import { useMemo, useState } from 'react';
-import { getApiBaseUrl } from '@/constants/oauth';
-import { mockBiomarkers, mockReports, generateMockReadings } from '@/lib/mock-data';
+import { useState } from 'react';
+import { useRouter } from 'expo-router';
 
-export default function DashboardScreen() {
+interface BiomarkerCard {
+  name: string;
+  value: number;
+  unit: string;
+  status: 'normal' | 'warning' | 'abnormal';
+  trend: string;
+}
+
+const SAMPLE_BIOMARKERS: BiomarkerCard[] = [
+  { name: 'Hemoglobin', value: 13.5, unit: 'g/dL', status: 'normal', trend: '→' },
+  { name: 'Glucose', value: 95, unit: 'mg/dL', status: 'normal', trend: '↑' },
+  { name: 'Creatinine', value: 1.1, unit: 'mg/dL', status: 'normal', trend: '→' },
+  { name: 'Cholesterol', value: 210, unit: 'mg/dL', status: 'warning', trend: '↓' },
+  { name: 'Blood Pressure', value: 138, unit: 'mmHg', status: 'warning', trend: '→' },
+  { name: 'Potassium', value: 4.2, unit: 'mmol/L', status: 'normal', trend: '→' },
+];
+
+export default function HomeScreen() {
   const colors = useColors();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [demoMode, setDemoMode] = useState(false);
+  const router = useRouter();
 
   const isLoading = authLoading && !demoMode;
   const showDashboard = isAuthenticated || demoMode;
-
-  const allReadings = useMemo(() => {
-    const readings: any[] = [];
-    mockBiomarkers.forEach((biomarker) => {
-      const biomarkerReadings = generateMockReadings(biomarker.id, 6);
-      readings.push(...biomarkerReadings);
-    });
-    return readings;
-  }, []);
-
-  const latestReadings = useMemo(() => {
-    const grouped: Record<number, (typeof allReadings)[0]> = {};
-    allReadings.forEach((reading) => {
-      if (!grouped[reading.biomarkerId] || new Date(reading.createdAt) > new Date(grouped[reading.biomarkerId].createdAt)) {
-        grouped[reading.biomarkerId] = reading;
-      }
-    });
-    return Object.values(grouped);
-  }, [allReadings]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -46,16 +44,29 @@ export default function DashboardScreen() {
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusBgColor = (status: string) => {
     switch (status) {
       case 'normal':
-        return '✓';
+        return '#D1FAE5';
       case 'warning':
-        return '⚠';
+        return '#FEF3C7';
       case 'abnormal':
-        return '✗';
+        return '#FEE2E2';
       default:
-        return '?';
+        return '#F3F4F6';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'normal':
+        return 'Normal';
+      case 'warning':
+        return 'Warning';
+      case 'abnormal':
+        return 'Abnormal';
+      default:
+        return 'Unknown';
     }
   };
 
@@ -69,149 +80,143 @@ export default function DashboardScreen() {
 
   if (!showDashboard) {
     return (
-      <ScreenContainer className="items-center justify-center gap-6 px-6">
-        <View className="items-center gap-3">
-          <Text className="text-5xl">❤️</Text>
-          <Text className="text-3xl font-bold text-foreground text-center">HealthTrack</Text>
-          <Text className="text-base text-muted text-center">Track your health records with ease</Text>
-        </View>
-        <View className="w-full gap-3 mt-8">
-          <TouchableOpacity
-            onPress={() => {
-              // Trigger OAuth flow
-              const baseUrl = getApiBaseUrl();
-              const redirectUri = `${baseUrl}/oauth/callback`;
-              const authUrl = `${baseUrl}/api/auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`;
-              if (typeof window !== 'undefined') {
-                window.location.href = authUrl;
-              }
-            }}
-            className="w-full bg-primary rounded-xl py-4 items-center"
-          >
-            <Text className="text-white font-semibold text-lg">Sign In with OAuth</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setDemoMode(true)}
-            className="w-full bg-surface rounded-xl py-4 items-center border-2"
-            style={{ borderColor: colors.primary }}
-          >
-            <Text className="font-semibold text-lg" style={{ color: colors.primary }}>
-              View Demo
-            </Text>
-          </TouchableOpacity>
-        </View>
-        <Text className="text-xs text-muted text-center mt-6">Demo shows sample health data</Text>
+      <ScreenContainer className="p-6 items-center justify-center">
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
+          <View className="items-center gap-6">
+            <Text className="text-5xl">❤️</Text>
+            <Text className="text-3xl font-bold text-foreground text-center">HealthTrack</Text>
+            <Text className="text-base text-muted text-center">Track your health records with ease</Text>
+
+            <View className="gap-3 w-full mt-6">
+              <TouchableOpacity
+                onPress={() => {
+                  const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+                  const redirectUri = `${process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL || 'http://localhost:3000'}/oauth/callback`;
+                  const appId = process.env.EXPO_PUBLIC_APP_ID || 'app-id';
+                  const loginUrl = `${process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL || 'http://localhost:3000'}/login?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+                  window.location.href = loginUrl;
+                }}
+                className="bg-primary rounded-xl py-4 items-center"
+              >
+                <Text className="text-white font-semibold text-lg">Sign In with OAuth</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setDemoMode(true)}
+                className="bg-surface rounded-xl py-4 items-center border-2 border-primary"
+              >
+                <Text className="text-primary font-semibold text-lg">View Demo</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text className="text-xs text-muted text-center mt-4">Demo shows sample health data</Text>
+          </View>
+        </ScrollView>
       </ScreenContainer>
     );
   }
 
+  // Premium Dashboard
+  const normalCount = SAMPLE_BIOMARKERS.filter(b => b.status === 'normal').length;
+  const warningCount = SAMPLE_BIOMARKERS.filter(b => b.status === 'warning').length;
+  const abnormalCount = SAMPLE_BIOMARKERS.filter(b => b.status === 'abnormal').length;
+
   return (
     <ScreenContainer className="p-0">
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
-        <View className="px-6 pt-6 pb-4">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1">
-              <Text className="text-3xl font-bold text-foreground">Dashboard</Text>
-              <Text className="text-sm text-muted mt-1">
-                {demoMode ? '📊 Demo Mode' : `${mockReports.length} reports uploaded`}
+        {/* Header */}
+        <View className="px-6 pt-8 pb-6">
+          <Text className="text-4xl font-bold text-foreground">Your Health</Text>
+          <Text className="text-base text-muted mt-2">Last updated 2 days ago</Text>
+        </View>
+
+        {/* Health Scorecard */}
+        <View className="px-6 mb-8">
+          <View className="bg-surface rounded-2xl p-6 border border-border">
+            <Text className="text-lg font-semibold text-foreground mb-6">Health Summary</Text>
+
+            <View className="flex-row justify-between mb-6">
+              {/* Normal */}
+              <View className="flex-1 mr-3 items-center">
+                <View className="w-16 h-16 rounded-full bg-green-50 items-center justify-center border-2 border-success mb-3">
+                  <Text className="text-2xl font-bold text-success">{normalCount}</Text>
+                </View>
+                <Text className="text-sm font-semibold text-foreground">Normal</Text>
+                <Text className="text-xs text-muted">Healthy</Text>
+              </View>
+
+              {/* Warning */}
+              <View className="flex-1 mx-1 items-center">
+                <View className="w-16 h-16 rounded-full bg-amber-50 items-center justify-center border-2 border-warning mb-3">
+                  <Text className="text-2xl font-bold text-warning">{warningCount}</Text>
+                </View>
+                <Text className="text-sm font-semibold text-foreground">Warning</Text>
+                <Text className="text-xs text-muted">Monitor</Text>
+              </View>
+
+              {/* Abnormal */}
+              <View className="flex-1 ml-3 items-center">
+                <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center border-2 border-error mb-3">
+                  <Text className="text-2xl font-bold text-error">{abnormalCount}</Text>
+                </View>
+                <Text className="text-sm font-semibold text-foreground">Abnormal</Text>
+                <Text className="text-xs text-muted">Action</Text>
+              </View>
+            </View>
+
+            {/* Overall Status */}
+            <View className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <Text className="text-xs font-semibold text-blue-900 mb-1">💡 Overall Status</Text>
+              <Text className="text-sm text-blue-800">
+                {warningCount === 0 && abnormalCount === 0
+                  ? 'All your metrics look great! Keep up the good work.'
+                  : `${warningCount + abnormalCount} metric(s) need attention. Tap to review.`}
               </Text>
             </View>
-            {demoMode && (
-              <TouchableOpacity
-                onPress={() => setDemoMode(false)}
-                className="w-10 h-10 rounded-full items-center justify-center"
-                style={{ backgroundColor: colors.error }}
-              >
-                <Text className="text-white font-bold">✕</Text>
-              </TouchableOpacity>
-            )}
           </View>
         </View>
 
-        {latestReadings.length > 0 && (
-          <View className="px-6 pb-6">
-            <Text className="text-lg font-semibold text-foreground mb-3">Key Metrics</Text>
-            <FlatList
-              data={latestReadings.slice(0, 4)}
-              keyExtractor={(item) => item.id.toString()}
-              scrollEnabled={false}
-              renderItem={({ item }) => {
-                const biomarker = mockBiomarkers.find((b) => b.id === item.biomarkerId);
-                return (
-                  <TouchableOpacity
-                    className="bg-surface rounded-xl p-4 mb-3 flex-row items-center justify-between border border-border"
-                  >
-                    <View className="flex-1">
-                      <Text className="text-sm text-muted">{biomarker?.name || 'Unknown'}</Text>
-                      <Text className="text-xl font-semibold text-foreground mt-1">
-                        {item.value} <Text className="text-sm text-muted">{biomarker?.unit}</Text>
-                      </Text>
-                      <Text className="text-xs text-muted mt-1">
-                        Ref: {biomarker?.referenceMin}-{biomarker?.referenceMax}
-                      </Text>
-                    </View>
-                    <View
-                      className="w-12 h-12 rounded-full items-center justify-center"
-                      style={{ backgroundColor: getStatusColor(item.status) }}
-                    >
-                      <Text className="text-lg font-bold text-white">{getStatusText(item.status)}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        )}
+        {/* Biomarkers */}
+        <View className="px-6 mb-8">
+          <Text className="text-lg font-semibold text-foreground mb-4">Your Metrics</Text>
 
-        {mockReports.length > 0 && (
-          <View className="px-6 pb-6">
-            <Text className="text-lg font-semibold text-foreground mb-3">Recent Reports</Text>
-            <FlatList
-              data={mockReports.slice(0, 3)}
-              keyExtractor={(item) => item.id.toString()}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  className="bg-surface rounded-xl p-4 mb-3 border border-border"
-                >
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-1">
-                      <Text className="text-sm font-semibold text-foreground capitalize">{item.reportType} Report</Text>
-                      <Text className="text-xs text-muted mt-1">
-                        {new Date(item.uploadedAt).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <View className="items-center">
-                      <Text className="text-lg font-bold text-primary">
-                        {allReadings.filter((r) => r.reportId === item.id).length}
-                      </Text>
-                      <Text className="text-xs text-muted">metrics</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        )}
+          {SAMPLE_BIOMARKERS.map((item, idx) => (
+            <TouchableOpacity
+              key={idx}
+              activeOpacity={0.7}
+              onPress={() => {}}
+              className="bg-surface rounded-xl p-4 mb-3 border border-border flex-row items-center justify-between"
+            >
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-foreground mb-1">{item.name}</Text>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-2xl font-bold text-foreground">{item.value}</Text>
+                  <Text className="text-sm text-muted">{item.unit}</Text>
+                  <Text className="text-lg" style={{ color: getStatusColor(item.status) }}>
+                    {item.trend}
+                  </Text>
+                </View>
+              </View>
 
-        {mockReports.length === 0 && (
-          <View className="flex-1 items-center justify-center px-6 py-12">
-            <Text className="text-xl font-semibold text-foreground mb-2">No Reports Yet</Text>
-            <Text className="text-sm text-muted text-center mb-6">
-              Upload your first health report to start tracking your biomarkers
-            </Text>
-          </View>
-        )}
+              <View className="rounded-full px-3 py-1 ml-4" style={{ backgroundColor: `${getStatusBgColor(item.status)}40` }}>
+                <Text className="text-xs font-semibold" style={{ color: getStatusColor(item.status) }}>
+                  {getStatusLabel(item.status)}
+                </Text>
+              </View>
 
-        <View className="h-20" />
+              <Text className="text-xl text-muted ml-2">›</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* CTA */}
+        <View className="px-6 pb-8">
+          <TouchableOpacity onPress={() => router.push('/upload')} className="bg-primary rounded-xl py-4 items-center">
+            <Text className="text-white font-semibold text-lg">📤 Upload New Report</Text>
+            <Text className="text-white text-xs mt-1">Add your latest test results</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-
-      <TouchableOpacity
-        className="absolute bottom-6 right-6 w-16 h-16 rounded-full items-center justify-center"
-        style={{ backgroundColor: colors.primary }}
-      >
-        <Text className="text-3xl font-bold text-white">+</Text>
-      </TouchableOpacity>
     </ScreenContainer>
   );
 }
