@@ -3,6 +3,7 @@ import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LineChart } from 'react-native-chart-kit';
+import { useState } from 'react';
 
 interface BiomarkerData {
   id: number;
@@ -148,12 +149,15 @@ const BIOMARKER_DETAILS: Record<number, BiomarkerData> = {
   },
 };
 
+type TimePeriod = '3m' | '6m' | '1y' | 'all';
+
 export default function BiomarkerDetailScreen() {
   const colors = useColors();
   const router = useRouter();
   const params = useLocalSearchParams();
   const biomarkerId = parseInt(params.id as string) || 0;
   const biomarker = BIOMARKER_DETAILS[biomarkerId];
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('6m');
 
   if (!biomarker) {
     return (
@@ -166,12 +170,29 @@ export default function BiomarkerDetailScreen() {
     );
   }
 
+  const getFilteredData = () => {
+    const data = biomarker.historicalData;
+    switch (timePeriod) {
+      case '3m':
+        return data.slice(-3);
+      case '6m':
+        return data.slice(-6);
+      case '1y':
+        return data.slice(-12);
+      case 'all':
+        return data;
+      default:
+        return data;
+    }
+  };
+
   const screenWidth = Dimensions.get('window').width;
+  const filteredData = getFilteredData();
   const chartData = {
-    labels: biomarker.historicalData.map(d => d.date),
+    labels: filteredData.map(d => d.date),
     datasets: [
       {
-        data: biomarker.historicalData.map(d => d.value),
+        data: filteredData.map(d => d.value),
         color: (opacity = 1) => {
           if (biomarker.status === 'normal') return `rgba(16, 185, 129, ${opacity})`;
           if (biomarker.status === 'warning') return `rgba(245, 158, 11, ${opacity})`;
@@ -216,6 +237,21 @@ export default function BiomarkerDetailScreen() {
         return 'Abnormal';
       default:
         return 'Unknown';
+    }
+  };
+
+  const getTrendPeriodLabel = () => {
+    switch (timePeriod) {
+      case '3m':
+        return '3-Month';
+      case '6m':
+        return '6-Month';
+      case '1y':
+        return '1-Year';
+      case 'all':
+        return 'Complete';
+      default:
+        return 'Trend';
     }
   };
 
@@ -276,30 +312,98 @@ export default function BiomarkerDetailScreen() {
           </View>
         </View>
 
+        {/* Time Period Filter */}
+        <View className="px-6 py-4">
+          <Text className="text-sm font-semibold text-muted mb-3">View Period</Text>
+          <View className="flex-row gap-2">
+            {[
+              { label: '3M', value: '3m' as TimePeriod },
+              { label: '6M', value: '6m' as TimePeriod },
+              { label: '1Y', value: '1y' as TimePeriod },
+              { label: 'All', value: 'all' as TimePeriod },
+            ].map((period) => (
+              <TouchableOpacity
+                key={period.value}
+                onPress={() => setTimePeriod(period.value)}
+                className={`flex-1 py-2 rounded-lg items-center border-2 ${
+                  timePeriod === period.value
+                    ? 'bg-primary border-primary'
+                    : 'bg-surface border-border'
+                }`}
+              >
+                <Text
+                  className={`font-semibold text-sm ${
+                    timePeriod === period.value ? 'text-white' : 'text-foreground'
+                  }`}
+                >
+                  {period.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         {/* Chart */}
         <View className="px-6 py-6 bg-surface rounded-2xl mx-6 mb-6 border border-border">
-          <Text className="text-lg font-semibold text-foreground mb-4">6-Month Trend</Text>
-          <LineChart
-            data={chartData}
-            width={screenWidth - 48}
-            height={220}
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              decimalPlaces: 1,
-              color: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-              style: { borderRadius: 16 },
-              propsForDots: {
-                r: '6',
-                strokeWidth: '2',
-                stroke: getStatusColor(biomarker.status),
-              },
-            }}
-            bezier
-            style={{ borderRadius: 16 }}
-          />
+          <Text className="text-lg font-semibold text-foreground mb-4">{getTrendPeriodLabel()} Trend</Text>
+          {filteredData.length > 0 ? (
+            <LineChart
+              data={chartData}
+              width={screenWidth - 48}
+              height={220}
+              chartConfig={{
+                backgroundColor: '#ffffff',
+                backgroundGradientFrom: '#ffffff',
+                backgroundGradientTo: '#ffffff',
+                decimalPlaces: 1,
+                color: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+                style: { borderRadius: 16 },
+                propsForDots: {
+                  r: '6',
+                  strokeWidth: '2',
+                  stroke: getStatusColor(biomarker.status),
+                },
+              }}
+              bezier
+              style={{ borderRadius: 16 }}
+            />
+          ) : (
+            <View className="h-56 items-center justify-center">
+              <Text className="text-muted">No data available for this period</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Data Points Summary */}
+        <View className="px-6 mb-6">
+          <View className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+            <Text className="text-sm font-semibold text-blue-900 mb-2">📊 Data Summary</Text>
+            <View className="flex-row justify-between">
+              <View>
+                <Text className="text-xs text-blue-700">Data Points</Text>
+                <Text className="text-lg font-bold text-blue-900">{filteredData.length}</Text>
+              </View>
+              <View>
+                <Text className="text-xs text-blue-700">Min Value</Text>
+                <Text className="text-lg font-bold text-blue-900">
+                  {Math.min(...filteredData.map(d => d.value)).toFixed(1)}
+                </Text>
+              </View>
+              <View>
+                <Text className="text-xs text-blue-700">Max Value</Text>
+                <Text className="text-lg font-bold text-blue-900">
+                  {Math.max(...filteredData.map(d => d.value)).toFixed(1)}
+                </Text>
+              </View>
+              <View>
+                <Text className="text-xs text-blue-700">Avg Value</Text>
+                <Text className="text-lg font-bold text-blue-900">
+                  {(filteredData.reduce((a, b) => a + b.value, 0) / filteredData.length).toFixed(1)}
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Interpretation */}

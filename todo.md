@@ -8,6 +8,9 @@
 ## Core Features (IN PROGRESS)
 - [x] Dashboard screen with quick stats and recent reports
 - [x] Comprehensive comparison charts screen with line charts
+- [x] Biomarker detail screens with large charts and reference ranges
+- [x] Date filtering for biomarker charts (3m, 6m, 1y, all-time)
+- [x] Data summary statistics (min, max, avg values)
 - [ ] Upload Report screen with working file picker
 - [ ] Gemini Vision API integration for biomarker extraction
 - [ ] Backend extraction endpoint to process uploads
