@@ -184,7 +184,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={idx}
               activeOpacity={0.7}
-              onPress={() => {}}
+              onPress={() => router.push(`/biomarker-detail?id=${idx}`)}
               className="bg-surface rounded-xl p-4 mb-3 border border-border flex-row items-center justify-between"
             >
               <View className="flex-1">
