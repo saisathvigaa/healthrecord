@@ -90,11 +90,11 @@ export default function HomeScreen() {
             <View className="gap-3 w-full mt-6">
               <TouchableOpacity
                 onPress={() => {
-                  const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
-                  const redirectUri = `${process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL || 'http://localhost:3000'}/oauth/callback`;
+                  // OAuth login - will open browser and redirect back
                   const appId = process.env.EXPO_PUBLIC_APP_ID || 'app-id';
+                  const redirectUri = `${process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL || 'http://localhost:3000'}/oauth/callback`;
                   const loginUrl = `${process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL || 'http://localhost:3000'}/login?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-                  window.location.href = loginUrl;
+                  router.push(loginUrl as any);
                 }}
                 className="bg-primary rounded-xl py-4 items-center"
               >

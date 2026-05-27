@@ -107,6 +107,32 @@ export const appRouter = router({
 
   biomarkers: router({
     list: publicProcedure.query(() => db.getBiomarkers()),
+    getReadings: protectedProcedure
+      .input(z.object({
+        timeRange: z.enum(['3m', '6m', '1y', 'all']).default('6m'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const allReadings = await db.getUserReadings(ctx.user.id);
+        const now = new Date();
+        let startDate = new Date();
+        
+        switch (input.timeRange) {
+          case '3m':
+            startDate.setMonth(startDate.getMonth() - 3);
+            break;
+          case '6m':
+            startDate.setMonth(startDate.getMonth() - 6);
+            break;
+          case '1y':
+            startDate.setFullYear(startDate.getFullYear() - 1);
+            break;
+          case 'all':
+            startDate = new Date(0);
+            break;
+        }
+        
+        return allReadings.filter((r: any) => new Date(r.readingDate) >= startDate);
+      }),
   }),
 
   readings: router({

@@ -38,3 +38,16 @@
 - [x] Database schema created
 - [x] Backend API routes implemented
 - [x] Dashboard screen built
+
+## Testing & Production Ready (NEW)
+- [ ] Real file picker for PDFs and images
+- [ ] S3 file upload integration
+- [ ] OAuth login activation and testing
+- [ ] Connect charts to real database data
+- [ ] Remove mock data from charts
+- [ ] Search and filter metrics by name
+- [ ] Filter biomarkers by date range
+- [ ] Filter biomarkers by status (normal/warning/abnormal)
+- [ ] Test OCR accuracy with sample reports
+- [ ] Build production APK for Android testing
+- [ ] Test complete upload → extract → display workflow
