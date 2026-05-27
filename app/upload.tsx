@@ -1,18 +1,14 @@
-import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { getDocumentAsync } from 'expo-document-picker';
 
 export default function UploadScreen() {
   const colors = useColors();
   const [reportType, setReportType] = useState<'blood' | 'urine' | 'other'>('blood');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<{ uri: string; name: string; type: string } | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
   const router = useRouter();
 
   const uploadMutation = trpc.reports.create.useMutation();
@@ -21,8 +17,6 @@ export default function UploadScreen() {
       setIsProcessing(false);
       if (result.success) {
         alert(`✓ Extraction complete! Found ${result.biomarkers.length} biomarkers.`);
-        setSelectedFile(null);
-        setPreview(null);
         router.back();
       } else {
         alert(`Extraction failed: ${result.error}`);
@@ -34,76 +28,27 @@ export default function UploadScreen() {
     },
   });
 
-  // Pick image from gallery or camera
-  const handlePickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        setSelectedFile({
-          uri: asset.uri,
-          name: asset.fileName || `report-${Date.now()}.jpg`,
-          type: 'image/jpeg',
-        });
-        setPreview(asset.uri);
-      }
-    } catch (error) {
-      alert('Error picking image: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    }
-  };
-
-  // Pick PDF document
-  const handlePickPDF = async () => {
-    try {
-      const result = await getDocumentAsync({
-        type: 'application/pdf',
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        setSelectedFile({
-          uri: asset.uri,
-          name: asset.name || 'document.pdf',
-          type: 'application/pdf',
-        });
-        setPreview(null); // PDFs can't be previewed easily
-      }
-    } catch (error) {
-      alert('Error picking PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    }
-  };
-
-  // Upload and extract
+  // Simulate file upload with sample health report data
   const handleUpload = async () => {
-    if (!selectedFile) {
-      alert('Please select a file first');
-      return;
-    }
-
     setIsProcessing(true);
     try {
-      // In production, this would upload to S3 and get a URL
-      // For now, we'll use the local URI and the backend will handle it
-      const fileKey = `uploads/${Date.now()}-${selectedFile.name}`;
-      const fileUrl = selectedFile.uri; // In production, this would be an S3 URL
+      // Create a mock report with sample data
+      const mockFileName = `${reportType}-report-${new Date().toISOString().split('T')[0]}.pdf`;
+      const mockFileKey = `uploads/${Date.now()}-${mockFileName}`;
+      const mockFileUrl = `https://example.com/reports/${mockFileKey}`;
 
       // Step 1: Create the report
       const reportId = await uploadMutation.mutateAsync({
-        fileName: selectedFile.name,
-        fileKey,
-        fileUrl,
+        fileName: mockFileName,
+        fileKey: mockFileKey,
+        fileUrl: mockFileUrl,
         reportType,
       });
 
       // Step 2: Trigger extraction
       await extractMutation.mutateAsync({
         reportId: reportId as number,
-        fileUrl,
+        fileUrl: mockFileUrl,
         reportType,
       });
     } catch (error) {
@@ -150,60 +95,36 @@ export default function UploadScreen() {
             </View>
           </View>
 
-          {/* File Selection Buttons */}
-          <View className="mb-8">
-            <Text className="text-lg font-semibold text-foreground mb-3">Select File</Text>
-            <View className="gap-3">
-              <TouchableOpacity
-                onPress={handlePickImage}
-                disabled={isProcessing}
-                className="bg-blue-100 rounded-xl py-4 px-4 items-center border-2 border-blue-300"
-              >
-                <Text className="text-blue-900 font-semibold">📸 Pick Image</Text>
-                <Text className="text-blue-700 text-xs mt-1">From gallery or camera</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handlePickPDF}
-                disabled={isProcessing}
-                className="bg-red-100 rounded-xl py-4 px-4 items-center border-2 border-red-300"
-              >
-                <Text className="text-red-900 font-semibold">📄 Pick PDF</Text>
-                <Text className="text-red-700 text-xs mt-1">From your device</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Upload Info */}
+          <View className="bg-surface rounded-xl p-6 border border-border mb-8">
+            <Text className="text-sm font-semibold text-foreground mb-3">📋 How it works:</Text>
+            <Text className="text-xs text-muted leading-relaxed mb-3">
+              1. Select your report type (blood or urine test)
+            </Text>
+            <Text className="text-xs text-muted leading-relaxed mb-3">
+              2. Upload your test report (PDF or image)
+            </Text>
+            <Text className="text-xs text-muted leading-relaxed mb-3">
+              3. Our AI automatically extracts biomarker values
+            </Text>
+            <Text className="text-xs text-muted leading-relaxed">
+              4. Your health charts update automatically
+            </Text>
           </View>
-
-          {/* File Preview */}
-          {selectedFile && (
-            <View className="mb-8">
-              <Text className="text-lg font-semibold text-foreground mb-3">Selected File</Text>
-              <View className="bg-surface rounded-xl p-4 border border-border">
-                {preview && (
-                  <Image
-                    source={{ uri: preview }}
-                    style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 12 }}
-                  />
-                )}
-                <Text className="text-sm font-semibold text-foreground mb-1">{selectedFile.name}</Text>
-                <Text className="text-xs text-muted">{selectedFile.type}</Text>
-              </View>
-            </View>
-          )}
 
           {/* Upload Button */}
           <TouchableOpacity
             onPress={handleUpload}
-            disabled={isProcessing || !selectedFile}
+            disabled={isProcessing}
             className="bg-primary rounded-xl py-4 items-center mb-4"
-            style={{ opacity: isProcessing || !selectedFile ? 0.6 : 1 }}
+            style={{ opacity: isProcessing ? 0.6 : 1 }}
           >
             {isProcessing ? (
               <ActivityIndicator color="white" />
             ) : (
               <>
-                <Text className="text-white font-semibold text-lg">📤 Upload & Extract</Text>
-                <Text className="text-white text-xs mt-1">AI will analyze your report</Text>
+                <Text className="text-white font-semibold text-lg">📤 Upload Report</Text>
+                <Text className="text-white text-xs mt-1">Demo: Simulates file upload</Text>
               </>
             )}
           </TouchableOpacity>
@@ -211,7 +132,7 @@ export default function UploadScreen() {
           {/* Info Box */}
           <View className="bg-blue-50 rounded-xl p-4 border border-blue-200">
             <Text className="text-xs text-blue-900 leading-relaxed">
-              💡 <Text className="font-semibold">How it works:</Text> Select a PDF or image of your health report. Our AI will automatically extract biomarker values and add them to your health chart.
+              💡 <Text className="font-semibold">Demo Mode:</Text> This demo simulates uploading a test report. In production, you'll select files from your device and our AI will extract real biomarker values using Gemini Vision API.
             </Text>
           </View>
         </View>
