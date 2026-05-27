@@ -5,7 +5,6 @@ import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -19,34 +18,22 @@ export async function getDb() {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+  if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+  if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
 
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
+    const values: InsertUser = { openId: user.openId };
     const updateSet: Record<string, unknown> = {};
 
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
+    const nullableFields = ["name", "email", "loginMethod", "passwordHash"] as const;
+    for (const field of nullableFields) {
       const value = user[field];
-      if (value === undefined) return;
+      if (value === undefined) continue;
       const normalized = value ?? null;
-      values[field] = normalized;
+      (values as any)[field] = normalized;
       updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
+    }
 
     if (user.lastSignedIn !== undefined) {
       values.lastSignedIn = user.lastSignedIn;
@@ -60,17 +47,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.role = "admin";
     }
 
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
+    if (!values.lastSignedIn) values.lastSignedIn = new Date();
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -79,13 +59,15 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
+  if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
 
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -113,9 +95,7 @@ export async function getReportById(id: number) {
 export async function updateReportStatus(id: number, status: "pending" | "processing" | "completed" | "failed", extractedData?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const updateData: any = {
-    extractionStatus: status,
-  };
+  const updateData: any = { extractionStatus: status };
   if (extractedData) {
     updateData.rawExtractedData = extractedData;
     updateData.extractedAt = new Date();
@@ -168,8 +148,7 @@ export async function getReadingsByBiomarker(userId: number, biomarkerId: number
   const db = await getDb();
   if (!db) return [];
   return db
-    .select()
-    .from(readings)
+    .select().from(readings)
     .where(and(eq(readings.userId, userId), eq(readings.biomarkerId, biomarkerId)))
     .orderBy(desc(readings.readingDate));
 }
@@ -179,5 +158,3 @@ export async function deleteReadingsByReport(reportId: number) {
   if (!db) throw new Error("Database not available");
   await db.delete(readings).where(eq(readings.reportId, reportId));
 }
-
-// TODO: add feature queries here as your schema grows.
