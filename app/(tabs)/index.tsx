@@ -2,8 +2,8 @@ import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from 'rea
 import { ScreenContainer } from '@/components/screen-container';
 import { useColors } from '@/hooks/use-colors';
 import { useAuth } from '@/hooks/use-auth';
-import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useState, useCallback } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 
 // Sample data used only in demo mode
@@ -27,6 +27,11 @@ export default function HomeScreen() {
     undefined,
     { enabled: isAuthenticated && !demoMode }
   );
+
+  // Refetch whenever this tab comes into focus (e.g. after upload)
+  useFocusEffect(useCallback(() => {
+    if (isAuthenticated && !demoMode) refetch();
+  }, [isAuthenticated, demoMode]));
 
   const isLoading = authLoading && !demoMode;
   const showDashboard = isAuthenticated || demoMode;
@@ -168,4 +173,62 @@ export default function HomeScreen() {
                     <View key={label} style={{ flex: 1, marginHorizontal: 4, alignItems: 'center' }}>
                       <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: color, marginBottom: 6 }}>
                         <Text style={{ fontSize: 22, fontWeight: 'bold', color }}>{count}</Text>
-                      </
+                      </View>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={{ backgroundColor: '#EFF6FF', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#BFDBFE' }}>
+                  <Text style={{ fontSize: 12, color: '#1e40af' }}>
+                    {warningCount === 0 && abnormalCount === 0
+                      ? '✅ All metrics look great!'
+                      : `⚠️ ${warningCount + abnormalCount} metric(s) need attention.`}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Biomarker list */}
+            <View style={{ paddingHorizontal: 24, marginBottom: 24 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111', marginBottom: 12 }}>
+                {demoMode ? 'Sample Metrics' : 'Your Metrics'}
+              </Text>
+              {biomarkers.map((item, idx) => (
+                <View
+                  key={idx}
+                  style={{ backgroundColor: '#f9fafb', borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#111', marginBottom: 4 }}>{item.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                      <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#111' }}>{item.value}</Text>
+                      <Text style={{ fontSize: 13, color: '#888' }}>{item.unit}</Text>
+                    </View>
+                  </View>
+                  <View style={{ borderRadius: 99, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: statusBg(item.status) }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: statusColor(item.status) }}>
+                      {statusLabel(item.status)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Upload more button */}
+            {!demoMode && (
+              <View style={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+                <TouchableOpacity
+                  onPress={() => router.push('/upload')}
+                  style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>📤 Upload Another Report</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        )}
+
+      </ScrollView>
+    </ScreenContainer>
+  );
+}

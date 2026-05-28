@@ -25,6 +25,7 @@ export default function UploadScreen() {
   const [pickedFile, setPickedFile] = useState<PickedFile | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const utils = trpc.useUtils();
   const extractMutation = trpc.reports.extractFromBase64.useMutation();
 
   // ── Pick file ───────────────────────────────────────────────────────────────
@@ -62,6 +63,8 @@ export default function UploadScreen() {
         reportType,
       });
       if (result.success) {
+        // Invalidate cache so home screen shows fresh data immediately
+        await utils.readings.list.invalidate();
         Alert.alert(
           '✓ Done!',
           `Found ${result.biomarkers.length} biomarker${result.biomarkers.length !== 1 ? 's' : ''} in your report.`,
@@ -130,4 +133,90 @@ export default function UploadScreen() {
                 flexDirection: 'row', alignItems: 'center', gap: 14,
                 padding: 20, borderRadius: 14,
                 borderWidth: 2, borderStyle: 'dashed', borderColor: '#e5e7eb',
-                backgroundColor:
+                backgroundColor: '#fafafa',
+              }}
+            >
+              <Text style={{ fontSize: 32 }}>📄</Text>
+              <View>
+                <Text style={{ fontWeight: '600', color: '#333', fontSize: 15 }}>Pick a File</Text>
+                <Text style={{ fontSize: 12, color: '#888', marginTop: 2 }}>PDF or image of your lab report</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Selected file preview */}
+          {pickedFile && (
+            <View style={{
+              padding: 14, borderRadius: 12, backgroundColor: '#EFF6FF',
+              borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 20,
+              flexDirection: 'row', alignItems: 'center', gap: 10,
+            }}>
+              <Text style={{ fontSize: 22 }}>{pickedFile.mimeType === 'application/pdf' ? '📄' : '🖼️'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '600', color: '#1e40af' }} numberOfLines={1}>{pickedFile.name}</Text>
+                {pickedFile.size > 0 && (
+                  <Text style={{ fontSize: 12, color: '#3b82f6', marginTop: 2 }}>{(pickedFile.size / 1024).toFixed(0)} KB</Text>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => setPickedFile(null)}>
+                <Text style={{ color: '#94a3b8', fontSize: 20 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Extract button */}
+          <TouchableOpacity
+            onPress={handleExtract}
+            disabled={isProcessing || !pickedFile}
+            style={{
+              backgroundColor: pickedFile ? colors.primary : '#e5e7eb',
+              borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+              opacity: isProcessing ? 0.75 : 1,
+            }}
+          >
+            {isProcessing ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <ActivityIndicator color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>AI is reading your report…</Text>
+              </View>
+            ) : (
+              <Text style={{ color: pickedFile ? '#fff' : '#aaa', fontWeight: '700', fontSize: 16 }}>
+                {pickedFile ? '✨ Extract Biomarkers' : 'Select a file first'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <Text style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 12 }}>
+            Processed by Gemini AI · stored securely
+          </Text>
+        </View>
+      </ScrollView>
+    </ScreenContainer>
+  );
+}
+
+async function uriToBase64(uri: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+  try {
+    const FileSystem = await import('expo-file-system');
+    return await FileSystem.default.readAsStringAsync(uri, { encoding: (FileSystem as any).EncodingType.Base64 });
+  } catch {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+}
