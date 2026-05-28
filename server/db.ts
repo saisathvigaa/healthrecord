@@ -161,4 +161,17 @@ export async function getUserReadings(userId: number) {
     .orderBy(desc(readings.readingDate));
 }
 
-export async function getRe
+export async function getReadingsByBiomarker(userId: number, biomarkerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select().from(readings)
+    .where(and(eq(readings.userId, userId), eq(readings.biomarkerId, biomarkerId)))
+    .orderBy(desc(readings.readingDate));
+}
+
+export async function deleteReadingsByReport(reportId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(readings).where(eq(readings.reportId, reportId));
+}
