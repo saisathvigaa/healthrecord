@@ -1,5 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
 import { InsertUser, InsertReport, InsertBiomarker, InsertReading, users, reports, biomarkers, readings } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -15,6 +16,88 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+/**
+ * Run startup DB migrations using raw mysql2.
+ * Creates any missing tables (biomarkers, reports, readings) and columns (passwordHash).
+ * Safe to call on every startup — uses CREATE TABLE IF NOT EXISTS.
+ */
+export async function runMigrations(): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.warn("[Migration] Skipping: DATABASE_URL not set");
+    return;
+  }
+
+  let connection: mysql.Connection | null = null;
+  try {
+    connection = await mysql.createConnection(databaseUrl);
+    console.log("[Migration] Running startup migrations...");
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS \`biomarkers\` (
+        \`id\` int AUTO_INCREMENT NOT NULL,
+        \`name\` varchar(255) NOT NULL,
+        \`unit\` varchar(50) NOT NULL DEFAULT '',
+        \`referenceMin\` varchar(50),
+        \`referenceMax\` varchar(50),
+        \`referenceText\` text,
+        \`description\` text,
+        \`category\` varchar(50) NOT NULL DEFAULT 'general',
+        \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`biomarkers_name_unique\` (\`name\`)
+      )
+    `);
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS \`reports\` (
+        \`id\` int AUTO_INCREMENT NOT NULL,
+        \`userId\` int NOT NULL,
+        \`fileName\` varchar(255) NOT NULL,
+        \`fileKey\` varchar(512) NOT NULL,
+        \`fileUrl\` text,
+        \`reportType\` enum('blood','urine','other') NOT NULL DEFAULT 'blood',
+        \`uploadedAt\` timestamp NOT NULL DEFAULT (now()),
+        \`extractedAt\` timestamp,
+        \`extractionStatus\` enum('pending','processing','completed','failed') NOT NULL DEFAULT 'pending',
+        \`rawExtractedData\` text,
+        \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+        PRIMARY KEY (\`id\`)
+      )
+    `);
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS \`readings\` (
+        \`id\` int AUTO_INCREMENT NOT NULL,
+        \`userId\` int NOT NULL,
+        \`reportId\` int NOT NULL,
+        \`biomarkerId\` int NOT NULL,
+        \`value\` varchar(100) NOT NULL,
+        \`status\` enum('normal','warning','abnormal','unknown') NOT NULL DEFAULT 'unknown',
+        \`readingDate\` timestamp,
+        \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+        PRIMARY KEY (\`id\`)
+      )
+    `);
+
+    // Add passwordHash column to users if not already present (MySQL 8.0+)
+    try {
+      await connection.execute(
+        `ALTER TABLE \`users\` ADD COLUMN IF NOT EXISTS \`passwordHash\` varchar(255)`
+      );
+    } catch {
+      // Ignore: column already exists or ALTER not supported — not critical
+    }
+
+    console.log("[Migration] All tables created/verified successfully");
+  } catch (error) {
+    console.error("[Migration] Startup migration failed:", error);
+    throw error;
+  } finally {
+    if (connection) await connection.end();
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

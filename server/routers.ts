@@ -110,6 +110,10 @@ export const appRouter = router({
           const biomarkers = await extractBiomarkersWithGemini(input.base64Data, input.mimeType);
           const createdReadings = await saveExtractedBiomarkers(ctx.user.id, reportId as number, biomarkers);
           await db.updateReportStatus(reportId as number, "completed", JSON.stringify(biomarkers));
+          if (createdReadings === 0 && biomarkers.length > 0) {
+            console.error(`[Router] extractFromBase64: extracted ${biomarkers.length} biomarkers but saved 0 readings — possible DB table missing`);
+            throw new Error(`Extracted ${biomarkers.length} biomarkers but failed to save any to the database. Check server logs for details.`);
+          }
           return { success: true, biomarkers, createdReadings };
         } catch (error) {
           const msg = error instanceof Error ? error.message : "Extraction failed";
