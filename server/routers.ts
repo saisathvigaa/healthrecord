@@ -98,26 +98,33 @@ export const appRouter = router({
         reportType: z.enum(["blood", "urine", "other"]).default("blood"),
       }))
       .mutation(async ({ ctx, input }) => {
-        const reportId = await db.createReport({
-          userId: ctx.user.id,
-          fileName: input.fileName,
-          fileKey: `upload/${Date.now()}-${input.fileName}`,
-          fileUrl: "",
-          reportType: input.reportType,
-          extractionStatus: "processing",
-        });
+        console.log(`[extractFromBase64] userId=${ctx.user.id} fileName="${input.fileName}" mimeType=${input.mimeType}`);
+        let reportId: number | null = null;
         try {
+          reportId = await db.createReport({
+            userId: ctx.user.id,
+            fileName: input.fileName,
+            fileKey: `upload/${Date.now()}-${input.fileName}`,
+            fileUrl: "",
+            reportType: input.reportType,
+            extractionStatus: "processing",
+          }) as number;
+          console.log(`[extractFromBase64] created report id=${reportId}`);
+
           const biomarkers = await extractBiomarkersWithGemini(input.base64Data, input.mimeType);
-          const createdReadings = await saveExtractedBiomarkers(ctx.user.id, reportId as number, biomarkers);
-          await db.updateReportStatus(reportId as number, "completed", JSON.stringify(biomarkers));
-          if (createdReadings === 0 && biomarkers.length > 0) {
-            console.error(`[Router] extractFromBase64: extracted ${biomarkers.length} biomarkers but saved 0 readings — possible DB table missing`);
-            throw new Error(`Extracted ${biomarkers.length} biomarkers but failed to save any to the database. Check server logs for details.`);
-          }
+          console.log(`[extractFromBase64] AI extracted ${biomarkers.length} biomarkers`);
+
+          const createdReadings = await saveExtractedBiomarkers(ctx.user.id, reportId, biomarkers);
+          console.log(`[extractFromBase64] saved ${createdReadings} readings to DB`);
+
+          try { await db.updateReportStatus(reportId, "completed", JSON.stringify(biomarkers)); } catch {}
           return { success: true, biomarkers, createdReadings };
         } catch (error) {
           const msg = error instanceof Error ? error.message : "Extraction failed";
-          await db.updateReportStatus(reportId as number, "failed", msg);
+          console.error(`[extractFromBase64] ERROR: ${msg}`);
+          if (reportId !== null) {
+            try { await db.updateReportStatus(reportId, "failed", msg); } catch {}
+          }
           return { success: false, error: msg, biomarkers: [] };
         }
       }),
@@ -169,9 +176,11 @@ export const appRouter = router({
   }),
 
   readings: router({
-    list: protectedProcedure.query(({ ctx }) =>
-      db.getUserReadings(ctx.user.id)
-    ),
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const result = await db.getUserReadings(ctx.user.id);
+      console.log(`[readings.list] userId=${ctx.user.id} → ${result.length} readings`);
+      return result;
+    }),
     byBiomarker: protectedProcedure
       .input(z.object({ biomarkerId: z.number() }))
       .query(({ ctx, input }) =>

@@ -52,9 +52,9 @@ export default function ChartsScreen() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
 
-  const { data: readings, isLoading, refetch } = trpc.readings.list.useQuery(
+  const { data: readings, isLoading, refetch, error: readingsError } = trpc.readings.list.useQuery(
     undefined,
-    { enabled: isAuthenticated }
+    { enabled: isAuthenticated, retry: 1 }
   );
 
   useFocusEffect(useCallback(() => {
@@ -97,6 +97,26 @@ export default function ChartsScreen() {
       <ScreenContainer style={{ alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={{ color: '#888', marginTop: 12 }}>Loading your data…</Text>
+      </ScreenContainer>
+    );
+  }
+
+  if (readingsError) {
+    return (
+      <ScreenContainer style={{ alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <Text style={{ fontSize: 36, marginBottom: 12 }}>⚠️</Text>
+        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#111', textAlign: 'center', marginBottom: 8 }}>
+          Could not load data
+        </Text>
+        <Text style={{ fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 16 }}>
+          {readingsError.message}
+        </Text>
+        <TouchableOpacity
+          onPress={() => refetch()}
+          style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+        </TouchableOpacity>
       </ScreenContainer>
     );
   }

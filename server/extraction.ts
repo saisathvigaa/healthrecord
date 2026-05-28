@@ -176,7 +176,9 @@ Be thorough and extract ALL visible biomarkers from the report.`;
 }
 
 /**
- * Process extracted biomarkers and save them to the database
+ * Process extracted biomarkers and save them to the database.
+ * Throws if ALL biomarkers fail to save (so the caller can surface the real error).
+ * Individual failures are logged but don't abort the batch.
  */
 export async function saveExtractedBiomarkers(
   userId: number,
@@ -184,32 +186,28 @@ export async function saveExtractedBiomarkers(
   extractedBiomarkers: ExtractedBiomarker[]
 ): Promise<number> {
   let createdReadings = 0;
+  const errors: string[] = [];
 
   for (const biomarker of extractedBiomarkers) {
     try {
-      // Find or create the biomarker in the database
+      // Find or create the biomarker record
       let biomarkerRecord = await db.getBiomarkerByName(biomarker.name);
 
       if (!biomarkerRecord) {
-        // Create new biomarker if it doesn't exist
         const biomarkerId = await db.createBiomarker({
           name: biomarker.name,
-          unit: biomarker.unit,
-          referenceMin: biomarker.referenceMin || "",
-          referenceMax: biomarker.referenceMax || "",
+          unit: biomarker.unit || "",
+          // pass undefined (not "") so nullable columns stay null
+          referenceMin: biomarker.referenceMin || undefined,
+          referenceMax: biomarker.referenceMax || undefined,
         });
         biomarkerRecord = { id: biomarkerId, name: biomarker.name, unit: biomarker.unit } as any;
       }
 
-      if (!biomarkerRecord) {
-        throw new Error(`Failed to create biomarker ${biomarker.name}`);
-      }
-
-      // Create a reading for this biomarker
       await db.createReading({
         userId,
         reportId,
-        biomarkerId: biomarkerRecord.id,
+        biomarkerId: biomarkerRecord!.id,
         value: biomarker.value,
         status: biomarker.status,
         readingDate: new Date(),
@@ -217,8 +215,20 @@ export async function saveExtractedBiomarkers(
 
       createdReadings++;
     } catch (error) {
-      console.error(`Failed to save biomarker ${biomarker.name}:`, error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[saveExtractedBiomarkers] Failed to save "${biomarker.name}": ${msg}`);
+      errors.push(`${biomarker.name}: ${msg}`);
     }
+  }
+
+  console.log(`[saveExtractedBiomarkers] Saved ${createdReadings}/${extractedBiomarkers.length} readings (userId=${userId}, reportId=${reportId})`);
+
+  // If every single biomarker failed, throw so the caller can show the real error
+  if (createdReadings === 0 && extractedBiomarkers.length > 0) {
+    throw new Error(
+      `Failed to save any biomarkers to the database. ` +
+      `First error: ${errors[0] ?? "unknown error"}`
+    );
   }
 
   return createdReadings;

@@ -23,9 +23,9 @@ export default function HomeScreen() {
   const router = useRouter();
 
   // Fetch real readings from DB (only when authenticated)
-  const { data: readings, isLoading: readingsLoading, refetch } = trpc.readings.list.useQuery(
+  const { data: readings, isLoading: readingsLoading, refetch, error: readingsError } = trpc.readings.list.useQuery(
     undefined,
-    { enabled: isAuthenticated && !demoMode }
+    { enabled: isAuthenticated && !demoMode, retry: 1 }
   );
 
   // Refetch whenever this tab comes into focus (e.g. after upload)
@@ -135,6 +135,17 @@ export default function HomeScreen() {
           <View style={{ alignItems: 'center', padding: 32 }}>
             <ActivityIndicator color={colors.primary} />
             <Text style={{ color: '#888', marginTop: 8 }}>Loading your data…</Text>
+          </View>
+        )}
+
+        {/* Error state — shows actual error so we can diagnose */}
+        {!demoMode && !readingsLoading && readingsError && (
+          <View style={{ marginHorizontal: 24, marginBottom: 16, padding: 14, backgroundColor: '#FEE2E2', borderRadius: 12, borderWidth: 1, borderColor: '#FECACA' }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#991B1B', marginBottom: 4 }}>⚠️ Could not load your data</Text>
+            <Text style={{ fontSize: 12, color: '#7F1D1D' }}>{readingsError.message}</Text>
+            <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#DC2626', fontWeight: '600' }}>Tap to retry</Text>
+            </TouchableOpacity>
           </View>
         )}
 

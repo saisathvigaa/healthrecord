@@ -65,9 +65,10 @@ export default function UploadScreen() {
       if (result.success) {
         // Invalidate cache so home screen shows fresh data immediately
         await utils.readings.list.invalidate();
+        const saved = (result as any).createdReadings ?? result.biomarkers.length;
         Alert.alert(
           '✓ Done!',
-          `Found ${result.biomarkers.length} biomarker${result.biomarkers.length !== 1 ? 's' : ''} in your report.`,
+          `Extracted ${result.biomarkers.length} biomarker${result.biomarkers.length !== 1 ? 's' : ''} and saved ${saved} to your dashboard.`,
           [{ text: 'View Dashboard', onPress: () => router.replace('/(tabs)') }],
         );
       } else {

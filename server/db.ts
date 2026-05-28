@@ -32,7 +32,24 @@ export async function runMigrations(): Promise<void> {
 
   let connection: mysql.Connection | null = null;
   try {
-    connection = await mysql.createConnection(databaseUrl);
+    // Parse URL to build options — handles Railway MySQL which may need ssl
+    let connectionOptions: mysql.ConnectionOptions;
+    try {
+      const u = new URL(databaseUrl);
+      connectionOptions = {
+        host: u.hostname,
+        port: u.port ? parseInt(u.port) : 3306,
+        user: decodeURIComponent(u.username),
+        password: decodeURIComponent(u.password),
+        database: u.pathname.replace(/^\//, ""),
+        ssl: { rejectUnauthorized: false }, // railway may require ssl
+        multipleStatements: false,
+      };
+    } catch {
+      // Fall back to raw URL string if URL parsing fails
+      connectionOptions = databaseUrl as any;
+    }
+    connection = await mysql.createConnection(connectionOptions);
     console.log("[Migration] Running startup migrations...");
 
     await connection.execute(`
@@ -93,10 +110,10 @@ export async function runMigrations(): Promise<void> {
 
     console.log("[Migration] All tables created/verified successfully");
   } catch (error) {
-    console.error("[Migration] Startup migration failed:", error);
-    throw error;
+    // Log clearly but don't crash the server — DB may already be migrated
+    console.error("[Migration] Startup migration error (server will still start):", error);
   } finally {
-    if (connection) await connection.end();
+    if (connection) await connection.end().catch(() => {});
   }
 }
 
