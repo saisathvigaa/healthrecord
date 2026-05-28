@@ -5,6 +5,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { extractBiomarkersFromReport, saveExtractedBiomarkers } from "./extraction";
+import { extractBiomarkersWithGemini } from "./_core/gemini";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -86,6 +87,34 @@ export const appRouter = router({
             error: errorMessage,
             biomarkers: [],
           };
+        }
+      }),
+    // Extract biomarkers from a base64-encoded file (PDF or image) using Gemini
+    extractFromBase64: protectedProcedure
+      .input(z.object({
+        base64Data: z.string(),
+        mimeType: z.enum(["application/pdf", "image/jpeg", "image/png"]),
+        fileName: z.string(),
+        reportType: z.enum(["blood", "urine", "other"]).default("blood"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const reportId = await db.createReport({
+          userId: ctx.user.id,
+          fileName: input.fileName,
+          fileKey: `upload/${Date.now()}-${input.fileName}`,
+          fileUrl: "",
+          reportType: input.reportType,
+          extractionStatus: "processing",
+        });
+        try {
+          const biomarkers = await extractBiomarkersWithGemini(input.base64Data, input.mimeType);
+          const createdReadings = await saveExtractedBiomarkers(ctx.user.id, reportId as number, biomarkers);
+          await db.updateReportStatus(reportId as number, "completed", JSON.stringify(biomarkers));
+          return { success: true, biomarkers, createdReadings };
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : "Extraction failed";
+          await db.updateReportStatus(reportId as number, "failed", msg);
+          return { success: false, error: msg, biomarkers: [] };
         }
       }),
     updateStatus: protectedProcedure

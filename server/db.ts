@@ -141,7 +141,24 @@ export async function createReading(data: InsertReading) {
 export async function getUserReadings(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(readings).where(eq(readings.userId, userId)).orderBy(desc(readings.readingDate));
+  // Join with biomarkers to include name and unit in the result
+  return db
+    .select({
+      id: readings.id,
+      userId: readings.userId,
+      reportId: readings.reportId,
+      biomarkerId: readings.biomarkerId,
+      value: readings.value,
+      status: readings.status,
+      readingDate: readings.readingDate,
+      createdAt: readings.createdAt,
+      biomarkerName: biomarkers.name,
+      unit: biomarkers.unit,
+    })
+    .from(readings)
+    .leftJoin(biomarkers, eq(readings.biomarkerId, biomarkers.id))
+    .where(eq(readings.userId, userId))
+    .orderBy(desc(readings.readingDate));
 }
 
 export async function getReadingsByBiomarker(userId: number, biomarkerId: number) {

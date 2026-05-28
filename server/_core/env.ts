@@ -7,4 +7,6 @@ export const ENV = {
   // Google OAuth (only needed if using Google Sign-In)
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  // Gemini API for health report extraction
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
 };

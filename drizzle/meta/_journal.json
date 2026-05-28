@@ -15,6 +15,13 @@
       "when": 1779818773857,
       "tag": "0001_misty_boomer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1779905796420,
+      "tag": "0002_cheerful_champions",
+      "breakpoints": true
     }
   ]
 }
