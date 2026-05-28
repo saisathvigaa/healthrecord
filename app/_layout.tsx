@@ -76,6 +76,8 @@ export default function RootLayout() {
                 gestureEnabled: false,
               }}
             />
+            {/* Upload screen */}
+            <Stack.Screen name="upload" />
             {/* OAuth callback for Google deep link */}
             <Stack.Screen name="oauth/callback" />
           </Stack>
