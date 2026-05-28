@@ -66,6 +66,43 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // Diagnostic endpoint — checks DB table existence and row counts
+  app.get("/api/debug/db", async (_req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const url = process.env.DATABASE_URL;
+      if (!url) return res.json({ error: "DATABASE_URL not set" });
+
+      let conn: import("mysql2/promise").Connection | null = null;
+      try {
+        const u = new URL(url);
+        conn = await mysql.default.createConnection({
+          host: u.hostname,
+          port: u.port ? parseInt(u.port) : 3306,
+          user: decodeURIComponent(u.username),
+          password: decodeURIComponent(u.password),
+          database: u.pathname.replace(/^\//, ""),
+          ssl: { rejectUnauthorized: false },
+        });
+
+        const tables: Record<string, number | string> = {};
+        for (const table of ["users", "biomarkers", "reports", "readings"]) {
+          try {
+            const [rows] = await conn.execute(`SELECT COUNT(*) as cnt FROM \`${table}\``);
+            tables[table] = (rows as any)[0].cnt;
+          } catch (e: any) {
+            tables[table] = `ERROR: ${e.message}`;
+          }
+        }
+        return res.json({ ok: true, tables });
+      } finally {
+        if (conn) await conn.end().catch(() => {});
+      }
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({
