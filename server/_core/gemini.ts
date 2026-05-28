@@ -72,16 +72,30 @@ export async function extractBiomarkersWithGemini(
     max_tokens: 4096,
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://healthrecord-production-68cc.up.railway.app",
-      "X-Title": "HealthRecord",
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60_000); // 60s timeout
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://healthrecord-production-68cc.up.railway.app",
+        "X-Title": "HealthRecord",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error("OpenRouter request timed out after 60 seconds. Try a smaller or clearer image.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const err = await response.text();
@@ -91,14 +105,22 @@ export async function extractBiomarkersWithGemini(
   const data = (await response.json()) as any;
   const text: string = data?.choices?.[0]?.message?.content ?? "";
 
-  // Parse JSON out of the response (strip any markdown code fences)
-  const clean = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  // Strip markdown code fences (handles ```json, ```JSON, ``` with \n or \r\n)
+  const clean = text
+    .replace(/```[\w]*\r?\n?/gi, "")
+    .replace(/```\r?\n?/g, "")
+    .trim();
+
   const start = clean.indexOf("[");
   const end = clean.lastIndexOf("]");
   if (start === -1 || end === -1) {
-    throw new Error("Model did not return a valid JSON array: " + clean.slice(0, 200));
+    throw new Error("Model did not return a valid JSON array: " + clean.slice(0, 300));
   }
 
-  const parsed = JSON.parse(clean.slice(start, end + 1)) as ExtractedBiomarker[];
-  return parsed;
+  try {
+    const parsed = JSON.parse(clean.slice(start, end + 1)) as ExtractedBiomarker[];
+    return parsed;
+  } catch (e) {
+    throw new Error("Failed to parse JSON from model response: " + clean.slice(start, start + 300));
+  }
 }
