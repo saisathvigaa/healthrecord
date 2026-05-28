@@ -65,6 +65,9 @@ export default function UploadScreen() {
       if (result.success) {
         // Invalidate cache so home screen shows fresh data immediately
         await utils.readings.list.invalidate();
+        await utils.reports.list.invalidate();
+        // Reset file picker so a second upload works cleanly
+        setPickedFile(null);
         const saved = (result as any).createdReadings ?? result.biomarkers.length;
         Alert.alert(
           '✓ Done!',

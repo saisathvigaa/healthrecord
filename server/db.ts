@@ -176,7 +176,12 @@ export async function createReport(data: InsertReport) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(reports).values(data);
-  return (result as any).insertId;
+  // drizzle-orm 0.44 + mysql2: insert returns [OkPacket, FieldPacket[]]
+  // so insertId lives on result[0], not result directly
+  const raw = result as any;
+  const insertId = Number(raw?.[0]?.insertId ?? raw?.insertId ?? 0);
+  if (!insertId) throw new Error(`createReport: DB did not return a valid insertId (got: ${JSON.stringify(raw)})`);
+  return insertId;
 }
 
 export async function getUserReports(userId: number) {
@@ -226,16 +231,37 @@ export async function getBiomarkerByName(name: string) {
 export async function createBiomarker(data: InsertBiomarker) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(biomarkers).values(data);
-  return (result as any).insertId;
+  // Use upsert: if a biomarker with this name already exists (e.g. from a prior failed upload),
+  // update its unit/refs rather than throwing a duplicate-key error.
+  const result = await db.insert(biomarkers).values(data).onDuplicateKeyUpdate({
+    set: {
+      unit: data.unit,
+      referenceMin: data.referenceMin ?? null,
+      referenceMax: data.referenceMax ?? null,
+    },
+  });
+  const raw = result as any;
+  const insertId = Number(raw?.[0]?.insertId ?? raw?.insertId ?? 0);
+  // If insertId is 0 on an upsert, the row already existed — look it up
+  if (!insertId) {
+    const existing = await getBiomarkerByName(data.name);
+    if (existing) return existing.id;
+    throw new Error(`createBiomarker: could not find or create biomarker "${data.name}"`);
+  }
+  return insertId;
 }
 
 // Readings
 export async function createReading(data: InsertReading) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Guard: reportId must be a real number — drizzle treats undefined as DEFAULT which MySQL rejects
+  if (!data.reportId || typeof data.reportId !== "number" || isNaN(data.reportId)) {
+    throw new Error(`createReading: reportId is required, got: ${data.reportId}`);
+  }
   const result = await db.insert(readings).values(data);
-  return (result as any).insertId;
+  const raw = result as any;
+  return Number(raw?.[0]?.insertId ?? raw?.insertId ?? 0);
 }
 
 export async function getUserReadings(userId: number) {
