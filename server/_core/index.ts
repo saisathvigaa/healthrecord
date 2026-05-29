@@ -130,7 +130,49 @@ async function startServer() {
           readingsCols = (cols as any[]).map(c => `${c.Field}(${c.Type})`);
         } catch {}
 
-        return res.json({ ok: true, tables, testInsertResult, readingsCols });
+        // Also test via drizzle ORM (this is what the app actually uses)
+        let drizzleInsertResult: any = "skipped";
+        try {
+          const { getDb } = await import("../db");
+          const { readings: readingsTable, biomarkers: biomarkersTable } = await import("../../drizzle/schema");
+          const drizzleDb = await getDb();
+          if (!drizzleDb) {
+            drizzleInsertResult = "ERROR: drizzle db not available";
+          } else {
+            // Get real IDs from DB
+            const [firstUser] = await conn.execute(`SELECT id FROM \`users\` LIMIT 1`);
+            const [firstBio] = await conn.execute(`SELECT id FROM \`biomarkers\` LIMIT 1`);
+            const [firstRep] = await conn.execute(`SELECT id FROM \`reports\` LIMIT 1`);
+            const testUserId = (firstUser as any)[0]?.id;
+            const testBioId = (firstBio as any)[0]?.id;
+            const testRepId = (firstRep as any)[0]?.id;
+            if (testUserId && testBioId && testRepId) {
+              try {
+                const result = await drizzleDb.insert(readingsTable).values({
+                  userId: testUserId,
+                  reportId: testRepId,
+                  biomarkerId: testBioId,
+                  value: "drizzle_test",
+                  status: "normal" as const,
+                  readingDate: new Date(),
+                });
+                const raw = result as any;
+                drizzleInsertResult = `SUCCESS insertId=${raw?.[0]?.insertId ?? raw?.insertId}`;
+                // Clean up
+                const { eq } = await import("drizzle-orm");
+                await drizzleDb.delete(readingsTable).where(eq(readingsTable.value, "drizzle_test"));
+              } catch (e: any) {
+                drizzleInsertResult = `FAILED: ${e.message} (code=${e.code})`;
+              }
+            } else {
+              drizzleInsertResult = `skipped: missing ids u=${testUserId} b=${testBioId} r=${testRepId}`;
+            }
+          }
+        } catch (e: any) {
+          drizzleInsertResult = `setup error: ${e.message}`;
+        }
+
+        return res.json({ ok: true, tables, testInsertResult, readingsCols, drizzleInsertResult });
       } finally {
         if (conn) await conn.end().catch(() => {});
       }
