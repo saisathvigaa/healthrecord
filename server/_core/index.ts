@@ -94,7 +94,43 @@ async function startServer() {
             tables[table] = `ERROR: ${e.message}`;
           }
         }
-        return res.json({ ok: true, tables });
+
+        // Get a real userId, reportId, biomarkerId to test with
+        let testInsertResult: any = "skipped";
+        try {
+          const [userRows] = await conn.execute(`SELECT id FROM \`users\` LIMIT 1`);
+          const [bioRows] = await conn.execute(`SELECT id FROM \`biomarkers\` LIMIT 1`);
+          const [repRows] = await conn.execute(`SELECT id FROM \`reports\` LIMIT 1`);
+          const userId = (userRows as any)[0]?.id;
+          const biomarkerId = (bioRows as any)[0]?.id;
+          const reportId = (repRows as any)[0]?.id;
+          if (userId && biomarkerId && reportId) {
+            try {
+              await conn.execute(
+                `INSERT INTO \`readings\` (\`userId\`, \`reportId\`, \`biomarkerId\`, \`value\`, \`status\`, \`readingDate\`) VALUES (?, ?, ?, ?, ?, ?)`,
+                [userId, reportId, biomarkerId, "99.9", "normal", new Date()]
+              );
+              // Clean up test row
+              await conn.execute(`DELETE FROM \`readings\` WHERE \`value\` = '99.9' LIMIT 1`);
+              testInsertResult = "SUCCESS";
+            } catch (e: any) {
+              testInsertResult = `FAILED: ${e.message} (code=${e.code})`;
+            }
+          } else {
+            testInsertResult = `missing ids: userId=${userId} biomarkerId=${biomarkerId} reportId=${reportId}`;
+          }
+        } catch (e: any) {
+          testInsertResult = `lookup error: ${e.message}`;
+        }
+
+        // Show readings table columns for schema verification
+        let readingsCols: string[] = [];
+        try {
+          const [cols] = await conn.execute(`SHOW COLUMNS FROM \`readings\``);
+          readingsCols = (cols as any[]).map(c => `${c.Field}(${c.Type})`);
+        } catch {}
+
+        return res.json({ ok: true, tables, testInsertResult, readingsCols });
       } finally {
         if (conn) await conn.end().catch(() => {});
       }
