@@ -172,7 +172,34 @@ async function startServer() {
           drizzleInsertResult = `setup error: ${e.message}`;
         }
 
-        return res.json({ ok: true, tables, testInsertResult, readingsCols, drizzleInsertResult });
+        // Test the actual saveExtractedBiomarkers function end-to-end
+        let saveFnResult: any = "skipped";
+        try {
+          const { saveExtractedBiomarkers } = await import("../extraction");
+          const [ur] = await conn.execute(`SELECT id FROM \`users\` LIMIT 1`);
+          const [rr] = await conn.execute(`SELECT id FROM \`reports\` LIMIT 1`);
+          const testUserId2 = (ur as any)[0]?.id;
+          const testRepId2 = (rr as any)[0]?.id;
+          if (testUserId2 && testRepId2) {
+            try {
+              const saved = await saveExtractedBiomarkers(testUserId2, testRepId2, [
+                { name: "__diag_test__", value: "1.23", unit: "mg/dL", status: "normal" },
+              ]);
+              const [cnt] = await conn.execute(`SELECT COUNT(*) as c FROM \`readings\` WHERE \`value\`='1.23'`);
+              await conn.execute(`DELETE FROM \`readings\` WHERE \`value\`='1.23'`);
+              await conn.execute(`DELETE FROM \`biomarkers\` WHERE \`name\`='__diag_test__'`);
+              saveFnResult = `saved=${saved} dbConfirm=${(cnt as any)[0].c}`;
+            } catch (e: any) {
+              saveFnResult = `THREW: ${e.message}`;
+            }
+          } else {
+            saveFnResult = `no user/report to test with`;
+          }
+        } catch (e: any) {
+          saveFnResult = `import error: ${e.message}`;
+        }
+
+        return res.json({ ok: true, tables, testInsertResult, readingsCols, drizzleInsertResult, saveFnResult });
       } finally {
         if (conn) await conn.end().catch(() => {});
       }
